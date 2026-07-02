@@ -1,20 +1,37 @@
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type !== 'DOWNLOAD') return;
-
-  chrome.downloads.download(
-    {
-      url: message.url,
-      filename: message.filename,
-      saveAs: false,
-    },
-    (downloadId) => {
-      if (chrome.runtime.lastError) {
-        sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-        return;
+  if (message.type === 'DOWNLOAD') {
+    chrome.downloads.download(
+      {
+        url: message.url,
+        filename: message.filename,
+        saveAs: false,
+      },
+      (downloadId) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        sendResponse({ ok: true, downloadId });
       }
-      sendResponse({ ok: true, downloadId });
-    }
-  );
+    );
+    return true;
+  }
 
-  return true;
+  if (message.type === 'DOWNLOAD_DATA') {
+    chrome.downloads.download(
+      {
+        url: message.dataUrl,
+        filename: message.filename,
+        saveAs: false,
+      },
+      (downloadId) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+        sendResponse({ ok: true, downloadId });
+      }
+    );
+    return true;
+  }
 });
