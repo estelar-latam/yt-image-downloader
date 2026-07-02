@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "YT Image Downloader",
+  "version": "1.0",
+  "description": "Descarga banner, logo y thumbnail de YouTube",
+  "permissions": ["activeTab"],
+  "action": { "default_popup": "popup.html" },
+  "content_scripts": [{
+    "matches": ["*://*.youtube.com/*"],
+    "js": ["content.js"]
+  }]
+}
