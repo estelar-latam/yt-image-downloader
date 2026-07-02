@@ -8,9 +8,62 @@ const PAGE_LABELS = {
 const FALLBACK_MESSAGE =
   'Clic en "Reescanear pagina". Si no funciona, actualiza Chrome o reinicia la extension.';
 
+let activeTabId = null;
+
+function escapeAttr(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function defaultFormat(image) {
+  return image.previewClass === 'avatar' ? 'png' : 'jpg';
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
+}
+
+function bindCardEvents(card, image) {
+  const formatButtons = card.querySelectorAll('.format-btn');
+  const downloadButton = card.querySelector('.download-btn');
+  let selectedFormat = defaultFormat(image);
+
+  formatButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedFormat = button.dataset.format;
+      formatButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
+    });
+  });
+
+  downloadButton.addEventListener('click', async () => {
+    if (!activeTabId) return;
+
+    const originalText = downloadButton.textContent;
+    downloadButton.disabled = true;
+    downloadButton.textContent = '...';
+
+    try {
+      const response = await chrome.tabs.sendMessage(activeTabId, {
+        type: 'DOWNLOAD_IMAGE',
+        url: image.url,
+        imageType: image.type,
+        format: selectedFormat,
+      });
+
+      if (!response?.ok) throw new Error(response?.error || 'Descarga fallida');
+      downloadButton.textContent = 'Listo';
+    } catch (_error) {
+      downloadButton.textContent = 'Error';
+    } finally {
+      downloadButton.disabled = false;
+      setTimeout(() => {
+        downloadButton.textContent = originalText;
+      }, 1800);
+    }
+  });
 }
 
 function render(images, pageType) {
@@ -25,8 +78,33 @@ function render(images, pageType) {
     return;
   }
 
-  status.textContent = `${pageLabel}: ${images.length} imagen(es) detectada(s).`;
-  list.innerHTML = images.map((image) => `<li>${image.label}</li>`).join('');
+  status.textContent = `${pageLabel}: ${images.length} imagen(es) con vista previa.`;
+  list.innerHTML = images
+    .map((image) => {
+      const previewClass = image.previewClass || 'thumbnail';
+      const format = defaultFormat(image);
+      return `
+        <li class="card" data-type="${escapeAttr(image.type)}">
+          <div class="card-title">${image.label}</div>
+          <div class="preview ${previewClass}">
+            <img src="${escapeAttr(image.url)}" alt="${escapeAttr(image.label)}" />
+          </div>
+          <div class="actions">
+            <div class="formats">
+              <button type="button" class="format-btn ${format === 'png' ? 'active' : ''}" data-format="png">PNG</button>
+              <button type="button" class="format-btn ${format === 'jpg' ? 'active' : ''}" data-format="jpg">JPG</button>
+            </div>
+            <button type="button" class="download-btn">Descargar</button>
+          </div>
+        </li>
+      `;
+    })
+    .join('');
+
+  list.querySelectorAll('.card').forEach((card) => {
+    const image = images.find((item) => item.type === card.dataset.type);
+    if (image) bindCardEvents(card, image);
+  });
 }
 
 async function isContentScriptReady(tabId) {
@@ -63,6 +141,8 @@ async function refresh() {
   const list = document.getElementById('list');
   const rescanButton = document.getElementById('rescan');
   const tab = await getActiveTab();
+
+  activeTabId = tab?.id ?? null;
 
   if (!tab?.id || !tab.url?.includes('youtube.com')) {
     status.textContent = 'Abre una pestana de YouTube primero.';

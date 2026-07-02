@@ -21,18 +21,6 @@
     return 'other';
   }
 
-  function getExtensionFromUrl(url) {
-    try {
-      const clean = url.split('?')[0];
-      const match = clean.match(/\.(jpe?g|png|webp|gif)$/i);
-      if (match) return match[1].toLowerCase().replace('jpeg', 'jpg');
-    } catch (_) {
-      /* ignore */
-    }
-    if (/webp/i.test(url)) return 'webp';
-    return 'jpg';
-  }
-
   function sanitizeFilename(name) {
     return name.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'image';
   }
@@ -46,6 +34,13 @@
     } catch (_) {
       return url.split('?')[0];
     }
+  }
+
+  function escapeAttr(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
   }
 
   function upgradeThumbnailUrl(url) {
@@ -73,7 +68,7 @@
       'yt-page-header-renderer img',
     ]);
     if (!url) return null;
-    return { type: 'banner', label: 'Banner del canal', url };
+    return { type: 'banner', label: 'Banner del canal', url, previewClass: 'banner' };
   }
 
   function findChannelAvatar() {
@@ -85,7 +80,7 @@
       'ytd-channel-name #avatar img',
     ]);
     if (!url || /hqdefault|maxresdefault|sddefault/i.test(url)) return null;
-    return { type: 'avatar', label: 'Logo del canal', url };
+    return { type: 'avatar', label: 'Logo del canal', url, previewClass: 'avatar' };
   }
 
   function findVideoThumbnail() {
@@ -99,6 +94,7 @@
       type: 'thumbnail',
       label: 'Thumbnail del video',
       url: upgradeThumbnailUrl(url),
+      previewClass: 'thumbnail',
     };
   }
 
@@ -130,6 +126,86 @@
     return found;
   }
 
+  async function convertImageToDataUrl(url, format) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas no disponible');
+
+    if (format === 'jpg') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+    const quality = format === 'jpg' ? 0.92 : undefined;
+    const converted = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error('Conversion fallida'));
+          return;
+        }
+        resolve(result);
+      }, mime, quality);
+    });
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Lectura fallida'));
+      reader.readAsDataURL(converted);
+    });
+  }
+
+  async function downloadImage(url, imageType, format, button = null) {
+    const originalText = button?.textContent ?? 'Descargar';
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = '...';
+    }
+
+    try {
+      const dataUrl = await convertImageToDataUrl(url, format);
+      const filename = `${sanitizeFilename(`youtube_${imageType}`)}.${format}`;
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'DOWNLOAD_DATA',
+        dataUrl,
+        filename,
+      });
+
+      if (!response?.ok) throw new Error(response?.error || 'Descarga fallida');
+
+      if (button) button.textContent = 'Listo';
+      return { ok: true };
+    } catch (error) {
+      if (button) button.textContent = 'Error';
+      throw error;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        setTimeout(() => {
+          if (button.textContent === 'Listo' || button.textContent === 'Error') {
+            button.textContent = originalText;
+          }
+        }, 1800);
+      }
+    }
+  }
+
   function injectStyles() {
     if (document.getElementById('yt-img-dl-styles')) return;
     const style = document.createElement('style');
@@ -147,15 +223,13 @@
         font-family: "Roboto", "Segoe UI", Arial, sans-serif;
         font-size: 13px;
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-        min-width: 220px;
-        max-width: 280px;
+        width: 300px;
+        max-height: 80vh;
+        overflow-y: auto;
       }
       #${PANEL_ID} .yt-img-dl-title {
         font-weight: 600;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        margin-bottom: 10px;
       }
       #${PANEL_ID} .yt-img-dl-empty {
         color: #aaa;
@@ -163,12 +237,8 @@
         line-height: 1.4;
       }
       #${PANEL_ID} .yt-img-dl-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-top: 6px;
-        padding-top: 6px;
+        margin-top: 10px;
+        padding-top: 10px;
         border-top: 1px solid #333;
       }
       #${PANEL_ID} .yt-img-dl-item:first-of-type {
@@ -176,37 +246,108 @@
         margin-top: 0;
         padding-top: 0;
       }
-      #${PANEL_ID} button {
+      #${PANEL_ID} .yt-img-dl-label {
+        font-weight: 500;
+        margin-bottom: 8px;
+        display: block;
+      }
+      #${PANEL_ID} .yt-img-dl-preview {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+      #${PANEL_ID} .yt-img-dl-preview.banner,
+      #${PANEL_ID} .yt-img-dl-preview.thumbnail {
+        height: 84px;
+      }
+      #${PANEL_ID} .yt-img-dl-preview.avatar {
+        width: 72px;
+        height: 72px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      #${PANEL_ID} .yt-img-dl-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      #${PANEL_ID} .yt-img-dl-preview.avatar img {
+        object-fit: cover;
+        border-radius: 50%;
+      }
+      #${PANEL_ID} .yt-img-dl-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #${PANEL_ID} .yt-img-dl-formats {
+        display: flex;
+        gap: 4px;
+        flex: 1;
+      }
+      #${PANEL_ID} .yt-img-dl-format {
+        flex: 1;
+        background: #333;
+        color: #ddd;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 6px 0;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      #${PANEL_ID} .yt-img-dl-format.active {
+        background: #ff0000;
+        border-color: #ff0000;
+        color: #fff;
+      }
+      #${PANEL_ID} .yt-img-dl-download {
         background: #ff0000;
         color: #fff;
         border: none;
         border-radius: 6px;
-        padding: 6px 10px;
+        padding: 6px 12px;
         cursor: pointer;
         font-size: 12px;
         white-space: nowrap;
       }
-      #${PANEL_ID} button:hover {
+      #${PANEL_ID} .yt-img-dl-download:hover {
         background: #cc0000;
       }
-      #${PANEL_ID} .yt-img-dl-label {
-        flex: 1;
-        line-height: 1.3;
+      #${PANEL_ID} .yt-img-dl-download:disabled {
+        opacity: 0.7;
+        cursor: wait;
       }
     `;
     document.head.appendChild(style);
   }
 
-  function requestDownload(url, type, button) {
-    const ext = getExtensionFromUrl(url);
-    const filename = `${sanitizeFilename(`youtube_${type}`)}.${ext}`;
+  function bindItemEvents(panel) {
+    panel.querySelectorAll('.yt-img-dl-item').forEach((item) => {
+      const formats = item.querySelectorAll('.yt-img-dl-format');
+      const downloadBtn = item.querySelector('.yt-img-dl-download');
+      let selectedFormat = 'jpg';
 
-    chrome.runtime.sendMessage({ type: 'DOWNLOAD', url, filename }, (response) => {
-      if (chrome.runtime.lastError || !response?.ok) {
-        button.textContent = 'Error';
-        return;
-      }
-      button.textContent = 'Listo';
+      formats.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          selectedFormat = btn.dataset.format;
+          formats.forEach((f) => f.classList.toggle('active', f === btn));
+        });
+      });
+
+      downloadBtn.addEventListener('click', () => {
+        downloadImage(
+          downloadBtn.dataset.url,
+          downloadBtn.dataset.type,
+          selectedFormat,
+          downloadBtn
+        );
+      });
     });
   }
 
@@ -229,14 +370,25 @@
     }
 
     const items = images
-      .map(
-        (image) => `
+      .map((image) => {
+        const previewClass = image.previewClass || 'thumbnail';
+        const defaultFormat = previewClass === 'avatar' ? 'png' : 'jpg';
+        return `
       <div class="yt-img-dl-item">
         <span class="yt-img-dl-label">${image.label}</span>
-        <button type="button" data-url="${image.url}" data-type="${image.type}">Descargar</button>
+        <div class="yt-img-dl-preview ${previewClass}">
+          <img src="${escapeAttr(image.url)}" alt="${escapeAttr(image.label)}" loading="lazy" />
+        </div>
+        <div class="yt-img-dl-actions">
+          <div class="yt-img-dl-formats">
+            <button type="button" class="yt-img-dl-format ${defaultFormat === 'png' ? 'active' : ''}" data-format="png">PNG</button>
+            <button type="button" class="yt-img-dl-format ${defaultFormat === 'jpg' ? 'active' : ''}" data-format="jpg">JPG</button>
+          </div>
+          <button type="button" class="yt-img-dl-download" data-url="${escapeAttr(image.url)}" data-type="${escapeAttr(image.type)}">Descargar</button>
+        </div>
       </div>
-    `
-      )
+    `;
+      })
       .join('');
 
     panel.innerHTML = `
@@ -244,11 +396,7 @@
       ${items}
     `;
 
-    panel.querySelectorAll('button').forEach((button) => {
-      button.addEventListener('click', () => {
-        requestDownload(button.dataset.url, button.dataset.type, button);
-      });
-    });
+    bindItemEvents(panel);
   }
 
   function update() {
@@ -287,6 +435,13 @@
     if (message.type === 'GET_STATUS' || message.type === 'RESCAN') {
       if (message.type === 'RESCAN') update();
       sendResponse({ images: findImages(), pageType: getPageType() });
+      return true;
+    }
+
+    if (message.type === 'DOWNLOAD_IMAGE') {
+      downloadImage(message.url, message.imageType, message.format)
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, error: error.message }));
       return true;
     }
   });
