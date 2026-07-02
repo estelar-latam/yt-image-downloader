@@ -1,4 +1,7 @@
 (() => {
+  if (window.__YT_IMG_DL_LOADED__) return;
+  window.__YT_IMG_DL_LOADED__ = true;
+
   const PANEL_ID = 'yt-img-dl-extension-panel';
   let debounceTimer = null;
   let lastPath = location.pathname + location.search;
@@ -276,6 +279,11 @@
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === 'PING') {
+      sendResponse({ ready: true });
+      return true;
+    }
+
     if (message.type === 'GET_STATUS' || message.type === 'RESCAN') {
       if (message.type === 'RESCAN') update();
       sendResponse({ images: findImages(), pageType: getPageType() });
