@@ -1,1 +1,70 @@
-<button onclick="chrome.tabs.query({active:true,currentWindow:true}, t=>chrome.scripting.executeScript({target:{tabId:t[0].id},func:()=>alert('Botones agregados')}))">Activar en YT</button>
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>YT Image Downloader</title>
+    <style>
+      body {
+        width: 300px;
+        margin: 0;
+        padding: 14px;
+        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+        font-size: 13px;
+        color: #212121;
+      }
+
+      h1 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+
+      #status {
+        color: #555;
+        margin-bottom: 12px;
+        line-height: 1.4;
+      }
+
+      #list {
+        margin: 0 0 12px;
+        padding: 0;
+        list-style: none;
+      }
+
+      #list li {
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      button {
+        background: #ff0000;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 14px;
+        cursor: pointer;
+        width: 100%;
+        font-size: 13px;
+      }
+
+      button:hover {
+        background: #cc0000;
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .empty {
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>YT Image Downloader</h1>
+    <p id="status">Cargando...</p>
+    <ul id="list"></ul>
+    <button id="rescan" type="button">Reescanear pagina</button>
+    <script src="popup.js"></script>
+  </body>
+</html>

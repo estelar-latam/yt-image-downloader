@@ -1,12 +1,36 @@
 {
   "manifest_version": 3,
   "name": "YT Image Downloader",
-  "version": "1.0",
+  "version": "1.1.0",
   "description": "Descarga banner, logo y thumbnail de YouTube",
-  "permissions": ["activeTab"],
-  "action": { "default_popup": "popup.html" },
-  "content_scripts": [{
-    "matches": ["*://*.youtube.com/*"],
-    "js": ["content.js"]
-  }]
+  "permissions": ["activeTab", "scripting", "downloads"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.ytimg.com/*",
+    "*://*.ggpht.com/*",
+    "*://*.googleusercontent.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
