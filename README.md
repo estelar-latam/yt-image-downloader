@@ -5,9 +5,11 @@ Extension de Chrome para descargar el banner, logo y thumbnail de canales y vide
 ## Funciones
 
 - Detecta imagenes en paginas de **canal**, **video** y **Shorts**
+- **Vista previa** de banner, logo y thumbnail antes de descargar
+- Descarga en formato **PNG** o **JPG** (con conversion automatica)
 - Panel flotante en la esquina inferior derecha de YouTube
-- Popup para ver el estado y reescanear la pagina activa
-- Descargas cross-origin mediante `chrome.downloads`
+- Popup con previsualizacion y selector de formato
+- Descargas mediante `chrome.downloads`
 - Compatible con la navegacion SPA de YouTube
 
 ## Instalacion (modo desarrollador)
@@ -51,9 +53,9 @@ Ruta recomendada en este equipo:
 ## Uso
 
 1. Abre un canal o video en YouTube.
-2. Aparecera un panel flotante con las imagenes detectadas.
-3. Haz clic en **Descargar** junto a cada imagen.
-4. Tambien puedes abrir el popup de la extension para ver el estado o reescanear.
+2. Aparecera un panel flotante con vista previa de cada imagen.
+3. Elige **PNG** o **JPG** y haz clic en **Descargar**.
+4. Tambien puedes usar el popup de la extension para ver previsualizaciones.
 
 ## Permisos
 
