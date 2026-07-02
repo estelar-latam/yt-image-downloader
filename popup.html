@@ -1,0 +1,1 @@
+<button onclick="chrome.tabs.query({active:true,currentWindow:true}, t=>chrome.scripting.executeScript({target:{tabId:t[0].id},func:()=>alert('Botones agregados')}))">Activar en YT</button>
